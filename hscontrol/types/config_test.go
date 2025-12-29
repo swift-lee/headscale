@@ -348,6 +348,173 @@ func TestReadConfigFromEnv(t *testing.T) {
 	}
 }
 
+func TestReadWeComConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	secretPath := filepath.Join(tmpDir, "wecom-secret")
+	require.NoError(t, os.WriteFile(secretPath, []byte("from-file\n"), 0o600))
+	t.Setenv("WECOM_SECRET_FILE", filepath.ToSlash(secretPath))
+
+	tests := []struct {
+		name   string
+		wecom string
+		want   WeComConfig
+	}{
+		{
+			name: "default-expiry-and-secret-path",
+			wecom: `
+wecom:
+  enabled: true
+  corp_id: ww123
+  agent_id: "1000002"
+  corp_secret_path: ${WECOM_SECRET_FILE}
+  allowed_userids:
+    - zhangsan
+`,
+			want: WeComConfig{
+				Enabled:        true,
+				CorpID:         "ww123",
+				AgentID:        "1000002",
+				CorpSecret:     "from-file",
+				AllowedUserIDs: []string{"zhangsan"},
+				Expiry:         defaultWeComExpiryTime,
+			},
+		},
+		{
+			name: "no-expiry",
+			wecom: `
+wecom:
+  enabled: true
+  corp_id: ww123
+  agent_id: "1000002"
+  corp_secret: inline-secret
+  expiry: 0
+`,
+			want: WeComConfig{
+				Enabled:        true,
+				CorpID:         "ww123",
+				AgentID:        "1000002",
+				CorpSecret:     "inline-secret",
+				AllowedUserIDs: []string{},
+				Expiry:         maxDuration,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			viper.Reset()
+			configPath := writeMinimalServerConfig(t, tt.wecom)
+
+			require.NoError(t, LoadConfig(configPath, true))
+			cfg, err := LoadServerConfig()
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.want, cfg.WeCom)
+		})
+	}
+}
+
+func TestReadWeComConfigErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		wecom   string
+		wantErr string
+	}{
+		{
+			name: "missing-corp-id",
+			wecom: `
+wecom:
+  enabled: true
+  agent_id: "1000002"
+  corp_secret: secret
+`,
+			wantErr: "Fatal config error: wecom.corp_id must be set when wecom.enabled is true",
+		},
+		{
+			name: "missing-agent-id",
+			wecom: `
+wecom:
+  enabled: true
+  corp_id: ww123
+  corp_secret: secret
+`,
+			wantErr: "Fatal config error: wecom.agent_id must be set when wecom.enabled is true",
+		},
+		{
+			name: "missing-secret",
+			wecom: `
+wecom:
+  enabled: true
+  corp_id: ww123
+  agent_id: "1000002"
+`,
+			wantErr: "Fatal config error: wecom.corp_secret or wecom.corp_secret_path must be set when wecom.enabled is true",
+		},
+		{
+			name: "secret-mutually-exclusive",
+			wecom: `
+wecom:
+  enabled: true
+  corp_id: ww123
+  agent_id: "1000002"
+  corp_secret: secret
+  corp_secret_path: /tmp/secret
+`,
+			wantErr: "Fatal config error: wecom.corp_secret and wecom.corp_secret_path are mutually exclusive",
+		},
+		{
+			name: "oidc-mutually-exclusive",
+			wecom: `
+oidc:
+  issuer: https://sso.example.com
+wecom:
+  enabled: true
+  corp_id: ww123
+  agent_id: "1000002"
+  corp_secret: secret
+`,
+			wantErr: "Fatal config error: wecom.enabled and oidc.issuer are mutually exclusive",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			viper.Reset()
+			configPath := writeMinimalServerConfig(t, tt.wecom)
+
+			require.NoError(t, LoadConfig(configPath, true))
+			_, err := LoadServerConfig()
+			require.Error(t, err)
+			assert.Equal(t, tt.wantErr, err.Error())
+		})
+	}
+}
+
+func writeMinimalServerConfig(t *testing.T, extra string) string {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	content := fmt.Sprintf(`
+server_url: http://localhost:8080
+noise:
+  private_key_path: %s
+prefixes:
+  v4: 100.64.0.0/10
+database:
+  type: sqlite3
+  sqlite:
+    path: %s
+dns:
+  override_local_dns: false
+%s
+`, filepath.ToSlash(filepath.Join(tmpDir, "noise.key")), filepath.ToSlash(filepath.Join(tmpDir, "headscale.db")), extra)
+
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o600))
+
+	return configPath
+}
+
 func TestTLSConfigValidation(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "headscale")
 	if err != nil {

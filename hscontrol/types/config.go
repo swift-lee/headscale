@@ -25,6 +25,7 @@ import (
 
 const (
 	defaultOIDCExpiryTime               = 180 * 24 * time.Hour // 180 Days
+	defaultWeComExpiryTime              = 180 * 24 * time.Hour // 180 Days
 	maxDuration           time.Duration = 1<<63 - 1
 	PKCEMethodPlain       string        = "plain"
 	PKCEMethodS256        string        = "S256"
@@ -32,6 +33,9 @@ const (
 
 var (
 	errOidcMutuallyExclusive = errors.New("oidc_client_secret and oidc_client_secret_path are mutually exclusive")
+	errWeComMutuallyExclusive = errors.New(
+		"wecom_corp_secret and wecom_corp_secret_path are mutually exclusive",
+	)
 	errServerURLSuffix       = errors.New("server_url cannot be part of base_domain in a way that could make the DERP and headscale server unreachable")
 	errServerURLSame         = errors.New("server_url cannot use the same domain as base_domain in a way that could make the DERP and headscale server unreachable")
 	errInvalidPKCEMethod     = errors.New("pkce.method must be either 'plain' or 'S256'")
@@ -89,6 +93,7 @@ type Config struct {
 	UnixSocketPermission fs.FileMode
 
 	OIDC OIDCConfig
+	WeCom WeComConfig
 
 	LogTail             LogTailConfig
 	RandomizeClientPort bool
@@ -185,6 +190,15 @@ type OIDCConfig struct {
 	Expiry                     time.Duration
 	UseExpiryFromToken         bool
 	PKCE                       PKCEConfig
+}
+
+type WeComConfig struct {
+	Enabled        bool
+	CorpID         string
+	AgentID        string
+	CorpSecret     string
+	AllowedUserIDs []string
+	Expiry         time.Duration
 }
 
 type DERPConfig struct {
@@ -328,6 +342,9 @@ func LoadConfig(path string, isFile bool) error {
 	viper.SetDefault("oidc.pkce.enabled", false)
 	viper.SetDefault("oidc.pkce.method", "S256")
 
+	viper.SetDefault("wecom.enabled", false)
+	viper.SetDefault("wecom.expiry", "180d")
+
 	viper.SetDefault("logtail.enabled", false)
 	viper.SetDefault("randomize_client_port", false)
 
@@ -413,6 +430,27 @@ func validateServerConfig() error {
 	if (viper.GetString("tls_letsencrypt_challenge_type") != HTTP01ChallengeType) &&
 		(viper.GetString("tls_letsencrypt_challenge_type") != TLSALPN01ChallengeType) {
 		errorText += "Fatal config error: the only supported values for tls_letsencrypt_challenge_type are HTTP-01 and TLS-ALPN-01\n"
+	}
+
+	if viper.GetBool("wecom.enabled") && viper.GetString("oidc.issuer") != "" {
+		errorText += "Fatal config error: wecom.enabled and oidc.issuer are mutually exclusive\n"
+	}
+
+	if viper.GetBool("wecom.enabled") {
+		if viper.GetString("wecom.corp_id") == "" {
+			errorText += "Fatal config error: wecom.corp_id must be set when wecom.enabled is true\n"
+		}
+		if viper.GetString("wecom.agent_id") == "" {
+			errorText += "Fatal config error: wecom.agent_id must be set when wecom.enabled is true\n"
+		}
+		if viper.GetString("wecom.corp_secret") != "" &&
+			viper.GetString("wecom.corp_secret_path") != "" {
+			errorText += "Fatal config error: wecom.corp_secret and wecom.corp_secret_path are mutually exclusive\n"
+		}
+		if viper.GetString("wecom.corp_secret") == "" &&
+			viper.GetString("wecom.corp_secret_path") == "" {
+			errorText += "Fatal config error: wecom.corp_secret or wecom.corp_secret_path must be set when wecom.enabled is true\n"
+		}
 	}
 
 	if !strings.HasPrefix(viper.GetString("server_url"), "http://") &&
@@ -892,6 +930,19 @@ func LoadServerConfig() (*Config, error) {
 		oidcClientSecret = strings.TrimSpace(string(secretBytes))
 	}
 
+	weComCorpSecret := viper.GetString("wecom.corp_secret")
+	weComCorpSecretPath := viper.GetString("wecom.corp_secret_path")
+	if weComCorpSecretPath != "" && weComCorpSecret != "" {
+		return nil, errWeComMutuallyExclusive
+	}
+	if weComCorpSecretPath != "" {
+		secretBytes, err := os.ReadFile(os.ExpandEnv(weComCorpSecretPath))
+		if err != nil {
+			return nil, err
+		}
+		weComCorpSecret = strings.TrimSpace(string(secretBytes))
+	}
+
 	serverURL := viper.GetString("server_url")
 
 	// BaseDomain cannot be the same as the server URL.
@@ -975,6 +1026,27 @@ func LoadServerConfig() (*Config, error) {
 				Enabled: viper.GetBool("oidc.pkce.enabled"),
 				Method:  viper.GetString("oidc.pkce.method"),
 			},
+		},
+		WeCom: WeComConfig{
+			Enabled:        viper.GetBool("wecom.enabled"),
+			CorpID:         viper.GetString("wecom.corp_id"),
+			AgentID:        viper.GetString("wecom.agent_id"),
+			CorpSecret:     weComCorpSecret,
+			AllowedUserIDs: viper.GetStringSlice("wecom.allowed_userids"),
+			Expiry: func() time.Duration {
+				if value := viper.GetString("wecom.expiry"); value == "0" {
+					return maxDuration
+				} else {
+					expiry, err := model.ParseDuration(value)
+					if err != nil {
+						log.Warn().Msg("failed to parse wecom.expiry, defaulting back to 180 days")
+
+						return defaultWeComExpiryTime
+					}
+
+					return time.Duration(expiry)
+				}
+			}(),
 		},
 
 		LogTail:             logTailConfig,
