@@ -579,13 +579,17 @@ func getCookieName(baseName, value string) string {
 }
 
 func setCSRFCookie(w http.ResponseWriter, r *http.Request, name string) (string, error) {
+	return setCSRFCookieForPath(w, r, name, "/oidc/callback")
+}
+
+func setCSRFCookieForPath(w http.ResponseWriter, r *http.Request, name, path string) (string, error) {
 	val, err := util.GenerateRandomStringURLSafe(64)
 	if err != nil {
 		return val, err
 	}
 
 	c := &http.Cookie{
-		Path:     "/oidc/callback",
+		Path:     path,
 		Name:     getCookieName(name, val),
 		Value:    val,
 		MaxAge:   int(time.Hour.Seconds()),
