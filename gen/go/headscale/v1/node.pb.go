@@ -29,6 +29,7 @@ const (
 	RegisterMethod_REGISTER_METHOD_AUTH_KEY    RegisterMethod = 1
 	RegisterMethod_REGISTER_METHOD_CLI         RegisterMethod = 2
 	RegisterMethod_REGISTER_METHOD_OIDC        RegisterMethod = 3
+	RegisterMethod_REGISTER_METHOD_WE_COM      RegisterMethod = 4
 )
 
 // Enum value maps for RegisterMethod.
@@ -38,12 +39,14 @@ var (
 		1: "REGISTER_METHOD_AUTH_KEY",
 		2: "REGISTER_METHOD_CLI",
 		3: "REGISTER_METHOD_OIDC",
+		4: "REGISTER_METHOD_WE_COM",
 	}
 	RegisterMethod_value = map[string]int32{
 		"REGISTER_METHOD_UNSPECIFIED": 0,
 		"REGISTER_METHOD_AUTH_KEY":    1,
 		"REGISTER_METHOD_CLI":         2,
 		"REGISTER_METHOD_OIDC":        3,
+		"REGISTER_METHOD_WE_COM":      4,
 	}
 )
 
@@ -1387,12 +1390,13 @@ const file_headscale_v1_node_proto_rawDesc = "" +
 	"\x16BackfillNodeIPsRequest\x12\x1c\n" +
 	"\tconfirmed\x18\x01 \x01(\bR\tconfirmed\"3\n" +
 	"\x17BackfillNodeIPsResponse\x12\x18\n" +
-	"\achanges\x18\x01 \x03(\tR\achanges*\x82\x01\n" +
+	"\achanges\x18\x01 \x03(\tR\achanges*\x9e\x01\n" +
 	"\x0eRegisterMethod\x12\x1f\n" +
 	"\x1bREGISTER_METHOD_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18REGISTER_METHOD_AUTH_KEY\x10\x01\x12\x17\n" +
 	"\x13REGISTER_METHOD_CLI\x10\x02\x12\x18\n" +
-	"\x14REGISTER_METHOD_OIDC\x10\x03B)Z'github.com/juanfont/headscale/gen/go/v1b\x06proto3"
+	"\x14REGISTER_METHOD_OIDC\x10\x03\x12\x1a\n" +
+	"\x16REGISTER_METHOD_WE_COM\x10\x04B)Z'github.com/juanfont/headscale/gen/go/v1b\x06proto3"
 
 var (
 	file_headscale_v1_node_proto_rawDescOnce sync.Once

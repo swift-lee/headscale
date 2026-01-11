@@ -12,6 +12,7 @@ enum RegisterMethod {
   REGISTER_METHOD_AUTH_KEY = 1;
   REGISTER_METHOD_CLI = 2;
   REGISTER_METHOD_OIDC = 3;
+  REGISTER_METHOD_WE_COM = 4;
 }
 
 message Node {

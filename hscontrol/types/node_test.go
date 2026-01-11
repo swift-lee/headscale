@@ -775,6 +775,14 @@ func TestNodeRegisterMethodToV1Enum(t *testing.T) {
 			want: v1.RegisterMethod_REGISTER_METHOD_CLI,
 		},
 		{
+			name: "wecom",
+			node: Node{
+				ID:             1,
+				RegisterMethod: util.RegisterMethodWeCom,
+			},
+			want: v1.RegisterMethod_REGISTER_METHOD_WE_COM,
+		},
+		{
 			name: "unknown",
 			node: Node{
 				ID: 0,

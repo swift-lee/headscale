@@ -580,6 +580,8 @@ func (node *Node) RegisterMethodToV1Enum() v1.RegisterMethod {
 		return v1.RegisterMethod_REGISTER_METHOD_OIDC
 	case "cli":
 		return v1.RegisterMethod_REGISTER_METHOD_CLI
+	case "wecom":
+		return v1.RegisterMethod_REGISTER_METHOD_WE_COM
 	default:
 		return v1.RegisterMethod_REGISTER_METHOD_UNSPECIFIED
 	}
