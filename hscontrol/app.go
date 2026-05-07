@@ -157,6 +157,9 @@ func NewHeadscale(cfg *types.Config) (*Headscale, error) {
 
 	var authProvider AuthProvider
 	authProvider = NewAuthProviderWeb(cfg.ServerURL)
+	if cfg.WeCom.Enabled && cfg.OIDC.Issuer != "" {
+		return nil, errors.New("wecom and oidc authentication are mutually exclusive")
+	}
 	if cfg.OIDC.Issuer != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -175,6 +178,13 @@ func NewHeadscale(cfg *types.Config) (*Headscale, error) {
 		} else {
 			authProvider = oidcProvider
 		}
+	}
+	if cfg.WeCom.Enabled {
+		authProvider = NewAuthProviderWeCom(
+			&app,
+			cfg.ServerURL,
+			&cfg.WeCom,
+		)
 	}
 	app.authProvider = authProvider
 
@@ -453,6 +463,9 @@ func (h *Headscale) createRouter(grpcMux *grpcRuntime.ServeMux) *mux.Router {
 
 	if provider, ok := h.authProvider.(*AuthProviderOIDC); ok {
 		router.HandleFunc("/oidc/callback", provider.OIDCCallbackHandler).Methods(http.MethodGet)
+	}
+	if provider, ok := h.authProvider.(*AuthProviderWeCom); ok {
+		router.HandleFunc("/wecom/callback", provider.CallbackHandler).Methods(http.MethodGet)
 	}
 	router.HandleFunc("/apple", h.AppleConfigMessage).Methods(http.MethodGet)
 	router.HandleFunc("/apple/{platform}", h.ApplePlatformConfig).
